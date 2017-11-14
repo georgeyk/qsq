@@ -204,8 +204,8 @@ def reborn_messages(context, queue, msglimit, quiet):
     dq_name = policy_data['deadLetterTargetArn'].split(':')[-1]
     return context.invoke(
         move_messages,
-        source_queue=source.url,
-        destination_queue=dq_name,
+        source_queue=dq_name,
+        destination_queue=source.url,
         msglimit=msglimit,
         quiet=quiet,
     )

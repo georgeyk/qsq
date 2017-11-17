@@ -53,7 +53,9 @@ tests_requirements = [
 
 # aiohttp version are directly tied with aiobotocore, please check before update it.
 install_requirements = [
-    'boto3>=1.3.0,<1.4.8',
+    'boto3',
+    'click',
+    'jmespath',
 ]
 
 
@@ -62,14 +64,14 @@ install_requirements = [
 setup(
     name='qsq',
     version=version,
-    description='Dead-Letter-Queue manager utility',
+    description='CLI utility to manage SQS queues, dead-letter-queues and messages',
     long_description=long_description,
     url='https://github.com/georgeyk/qsq/',
     download_url='https://github.com/georgeyk/qsq/releases',
     license='MIT',
     author='George Y. Kussumoto',
     author_email='contato@georgeyk.com.br',
-    packages=find_packages(exclude=['docs', 'tests', 'tests.*', 'requirements']),
+    packages=find_packages(exclude=['docs', 'tests', 'tests.*', 'Pipfile.*']),
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',

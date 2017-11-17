@@ -1,0 +1,19 @@
+[[source]]
+
+verify_ssl = true
+url = "https://pypi.python.org/simple"
+name = "pypi"
+
+
+[dev-packages]
+
+pytest = "*"
+pre-commit = "*"
+pytest-cov = "*"
+
+
+[packages]
+
+"boto3" = "*"
+click = "*"
+jmespath = "*"

@@ -1,8 +1,4 @@
-# -*- coding: utf-8 -*-
-
-import boto3
-
-sqs_resource = boto3.resource('sqs')
+import re
 
 
 class SQSQueue:
@@ -18,20 +14,29 @@ class SQSQueue:
     #
 
     @classmethod
-    def list_queues(cls, prefix=None):
+    def list_queues(cls, resource, prefix=None, min_count=None, pattern=None):
         if prefix:
             options = {'QueueNamePrefix': prefix}
         else:
             options = {}
-        queues = sqs_resource.queues.filter(**options)
-        return [cls(q) for q in queues]
+
+        queues = [cls(q) for q in resource.queues.filter(**options)]
+        min_count = max(min_count or 0, 0)
+        if min_count > 0:
+            queues = [q for q in queues if q.count >= min_count]
+
+        if pattern:
+            searcher = re.compile(pattern)
+            queues = [q for q in queues if searcher.search(q.name)]
+
+        return queues
 
     @classmethod
-    def get(cls, name_or_url):
+    def get(cls, resource, name_or_url):
         if name_or_url.startswith('http'):
-            queue = sqs_resource.Queue(name_or_url)
+            queue = resource.Queue(name_or_url)
         else:
-            queue = sqs_resource.get_queue_by_name(QueueName=name_or_url)
+            queue = resource.get_queue_by_name(QueueName=name_or_url)
 
         return cls(queue)
 
@@ -50,15 +55,13 @@ class SQSQueue:
     @property
     def count(self):
         count = self._aws_queue.attributes.get('ApproximateNumberOfMessages')
-        if count:
-            return int(count)
-        return 0
+        return max(count and int(count) or 0, 0)
 
     #
     # Public
     #
 
-    def get_messages(self, limit=None):
+    def get_messages(self, limit=None, delete=False):
         limit = limit or self.count
         max_receive = 10 if limit >= 10 else 1
         received = 0
@@ -79,27 +82,17 @@ class SQSQueue:
                 else:
                     break
 
+                if delete:
+                    message.delete()
+
             if failed_retrieve >= 3:
                 break
 
             remaining = limit - received
             max_receive = remaining if remaining < 10 else max_receive
 
-    def delete_messages(self, limit=None, receipts=None):
-        receipts = receipts or []
-        message_ids = [r.split('#')[0] for r in receipts]
-        count = 0
-        if message_ids or limit:
-            for message in self.get_messages(limit=limit):
-                if receipts and message.message_id not in message_ids:
-                    continue
-
-                message.delete()
-                count += 1
-        else:
-            return -1
-
-        return count
+    def purge(self):
+        return self._aws_queue.purge()
 
     def send_message(self, content):
         response = self._aws_queue.send_message(MessageBody=content)

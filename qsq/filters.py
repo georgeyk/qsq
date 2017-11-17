@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-
-from pprint import pformat
-import json
-
 import jmespath
 from jmespath.exceptions import JMESPathError
 

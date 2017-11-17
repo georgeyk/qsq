@@ -63,7 +63,6 @@ class SQSQueue:
         max_receive = 10 if limit >= 10 else 1
         received = 0
         failed_retrieve = 0
-        messages = []
         while received < limit:
             retrieved = self._aws_queue.receive_messages(
                 MaxNumberOfMessages=max_receive,

@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-import csv
 import json
 
 import click
@@ -14,7 +11,7 @@ from .models import SQSQueue
 
 @click.group()
 def cli():
-    '''
+    """
     A CLI utility to help manage SQS
 
     This tool provides an interface to perform actions on messages in queues.
@@ -26,7 +23,7 @@ def cli():
     Further details at: http://docs.aws.amazon.com/pt_br/cli/latest/userguide/cli-chap-getting-started.html
 
     Whenever necessary, queues can be referenced using their name or URL.
-    '''
+    """
     pass
 
 
@@ -36,13 +33,13 @@ def cli():
 @click.option('--indent', '-i', 'indent', default=2, type=int,
               help='JSON identation')
 def apply_filter(expression, stream, indent):
-    '''
+    """
     Filter json stream using jmespath
 
     `expression` is a jmespath query string
 
     `stream` a text stream or file (default to stdin)
-    '''
+    """
     if not stream:
         stream = click.get_text_stream('stdin')
 
@@ -69,9 +66,9 @@ def apply_filter(expression, stream, indent):
 @click.option('--indent', '-i', 'indent', default=2, type=int,
               help='JSON identation')
 def list_queues(prefix, indent):
-    '''
+    """
     List and filter queues
-    '''
+    """
     results = {'queues': []}
     queues = SQSQueue.list_queues(prefix=prefix)
     label = 'Processing queues'
@@ -97,9 +94,9 @@ def list_queues(prefix, indent):
 @click.option('--quiet', '-q', default=False, is_flag=True,
               help='Quiet mode (suppress any output or prompt)')
 def dump_messages(queue, msglimit, indent, quiet):
-    '''
+    """
     Retrieve and filter messages from queue
-    '''
+    """
     queue = SQSQueue.get(queue)
     messages = queue.get_messages(limit=msglimit)
     results = {'messages': []}
@@ -130,20 +127,20 @@ def dump_messages(queue, msglimit, indent, quiet):
 @click.option('--limit', '-l', 'msglimit', default=None, type=int,
               help='Limit the number of messages')
 @click.option('--quiet', '-q', default=False, is_flag=True,
-             help='Quiet mode (suppress any output or prompt)')
+              help='Quiet mode (suppress any output or prompt)')
 def remove_messages(queue, receipts, msglimit, quiet):
-    '''
+    """
     Remove messages from queue
 
     If no `limit` is set, then all messages will be removed.
-    '''
+    """
     queue = SQSQueue.get(queue)
     confirmation = False
     if not (quiet or msglimit or receipts):
         confirmation = click.confirm(
-             'This operation will remove all the messages.\nAre you sure about this ?',
-             abort=True
-         )
+            'This operation will remove all the messages.\nAre you sure about this ?',
+            abort=True,
+        )
 
     if confirmation or msglimit or receipts:
         deleted = queue.delete_messages(receipts=receipts, limit=msglimit)
@@ -159,9 +156,9 @@ def remove_messages(queue, receipts, msglimit, quiet):
 @click.option('--quiet', '-q', default=False, is_flag=True,
               help='Quiet mode (suppress any output or prompt)')
 def move_messages(source_queue, destination_queue, msglimit, quiet):
-    '''
+    """
     Move messages between queues
-    '''
+    """
     source = SQSQueue.get(source_queue)
     if source.count <= 0 and not quiet:
         click.echo('{} does not have messages available'.format(source.name), err=True)
@@ -189,9 +186,9 @@ def move_messages(source_queue, destination_queue, msglimit, quiet):
               help='Quiet mode (suppress any output or prompt)')
 @click.pass_context
 def reborn_messages(context, queue, msglimit, quiet):
-    '''
+    """
     Move messages from dead-queue to source-queue
-    '''
+    """
     source = SQSQueue.get(queue)
     policy = source._aws_queue.attributes.get('RedrivePolicy')
     if policy is None:

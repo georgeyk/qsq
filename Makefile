@@ -13,10 +13,7 @@ clean-dist:
 	@rm -rf build/
 	@rm -rf *.egg-info
 
-clean-tox:
-	@rm -rf .tox/
-
-clean: clean-pyc clean-dist clean-tox
+clean: clean-pyc clean-dist
 
 test:
 	py.test -vv tests
@@ -30,8 +27,8 @@ cov:
 cov-report:
 	py.test -vv --cov=qsq --cov-report=html tests
 
-tox:
-	tox -r
+lint:
+	pre-commit run -a -v
 
 dist: clean
 	python setup.py sdist

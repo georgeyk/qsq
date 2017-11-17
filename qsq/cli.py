@@ -1,4 +1,5 @@
 import json
+import boto3
 
 import click
 # FIXME:
@@ -9,16 +10,21 @@ from .filters import json_filter
 from .models import SQSQueue
 
 
+def get_resource(**options):
+    return boto3.resource('sqs', **options)
+
+
 @click.group()
 def cli():
     """
-    A CLI utility to help manage SQS
-
-    This tool provides an interface to perform actions on messages in queues.
+    A CLI utility to help manage SQS queues and messages
 
     Configuration is taken from `~/.aws/credentials` or the following
-    environment variables: AWS_DEFAULT_REGION, AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY
+    environment variables:
+
+        - AWS_DEFAULT_REGION\n
+        - AWS_ACCESS_KEY_ID\n
+        - AWS_SECRET_ACCESS_KEY\n
 
     Further details at: http://docs.aws.amazon.com/pt_br/cli/latest/userguide/cli-chap-getting-started.html
 
@@ -63,14 +69,18 @@ def apply_filter(expression, stream, indent):
 @cli.command('queues')
 @click.option('--prefix', '-p', default=None,
               help='Display only queues starting with prefix')
+@click.option('--match', '-m', default=None,
+              help='Display only queues that matches regex')
+@click.option('--min-count', '-c', 'min_count', default=None, type=int,
+              help='Display only queues with a minimal message count')
 @click.option('--indent', '-i', 'indent', default=2, type=int,
               help='JSON identation')
-def list_queues(prefix, indent):
+def list_queues(prefix, match, min_count, indent):
     """
     List and filter queues
     """
     results = {'queues': []}
-    queues = SQSQueue.list_queues(prefix=prefix)
+    queues = SQSQueue.list_queues(get_resource(), prefix=prefix, min_count=min_count, pattern=match)
     label = 'Processing queues'
     with click.progressbar(queues, label=label, file=_default_text_stderr()) as queuebar:
         for queue in queuebar:
@@ -91,13 +101,15 @@ def list_queues(prefix, indent):
               help='Limit the number of messages')
 @click.option('--indent', '-i', 'indent', default=2, type=int,
               help='JSON identation')
+@click.option('--delete', '-d', default=False, is_flag=True,
+              help='Delete retrieved messages')
 @click.option('--quiet', '-q', default=False, is_flag=True,
               help='Quiet mode (suppress any output or prompt)')
-def dump_messages(queue, msglimit, indent, quiet):
+def dump_messages(queue, msglimit, indent, delete, quiet):
     """
-    Retrieve and filter messages from queue
+    Retrieve messages from queue
     """
-    queue = SQSQueue.get(queue)
+    queue = SQSQueue.get(get_resource(), queue)
     messages = queue.get_messages(limit=msglimit)
     results = {'messages': []}
     label = 'Processing messages'
@@ -121,34 +133,29 @@ def dump_messages(queue, msglimit, indent, quiet):
     return results
 
 
-@cli.command('msg-rm')
+@cli.command('msg-purge')
 @click.argument('queue', required=True)
-@click.argument('receipts', required=False, nargs=-1)
-@click.option('--limit', '-l', 'msglimit', default=None, type=int,
-              help='Limit the number of messages')
 @click.option('--quiet', '-q', default=False, is_flag=True,
               help='Quiet mode (suppress any output or prompt)')
-def remove_messages(queue, receipts, msglimit, quiet):
+def remove_messages(queue, quiet):
     """
-    Remove messages from queue
-
-    If no `limit` is set, then all messages will be removed.
+    Purge messages from queue
     """
-    queue = SQSQueue.get(queue)
+    queue = SQSQueue.get(get_resource(), queue)
     confirmation = False
-    if not (quiet or msglimit or receipts):
+    if not quiet:
         confirmation = click.confirm(
             'This operation will remove all the messages.\nAre you sure about this ?',
             abort=True,
         )
 
-    if confirmation or msglimit or receipts:
-        deleted = queue.delete_messages(receipts=receipts, limit=msglimit)
-        if not quiet and deleted >= 0:
-            click.echo('Removed message(s): {}'.format(deleted))
+    if confirmation:
+        queue.purge()
+        if not quiet:
+            click.echo('"{}" purged'.format(queue.name))
 
 
-@cli.command('msg-mv')
+@cli.command('msg-move')
 @click.argument('source_queue', required=True)
 @click.argument('destination_queue', required=True)
 @click.option('--limit', '-l', 'msglimit', default=None, type=int,
@@ -159,12 +166,13 @@ def move_messages(source_queue, destination_queue, msglimit, quiet):
     """
     Move messages between queues
     """
-    source = SQSQueue.get(source_queue)
+    resource = get_resource()
+    source = SQSQueue.get(resource, source_queue)
     if source.count <= 0 and not quiet:
         click.echo('{} does not have messages available'.format(source.name), err=True)
         return
 
-    destination = SQSQueue.get(destination_queue)
+    destination = SQSQueue.get(resource, destination_queue)
     count = 0
     label = 'Processing messages'
     messages = source.get_messages(limit=msglimit)
@@ -179,17 +187,17 @@ def move_messages(source_queue, destination_queue, msglimit, quiet):
 
 
 @cli.command('msg-reborn')
-@click.argument('queue', required=True)
+@click.argument('source_queue', required=True)
 @click.option('--limit', '-l', 'msglimit', default=None, type=int,
               help='Limit the number of messages')
 @click.option('--quiet', '-q', default=False, is_flag=True,
               help='Quiet mode (suppress any output or prompt)')
 @click.pass_context
-def reborn_messages(context, queue, msglimit, quiet):
+def reborn_messages(context, source_queue, msglimit, quiet):
     """
     Move messages from dead-queue to source-queue
     """
-    source = SQSQueue.get(queue)
+    source = SQSQueue.get(get_resource(), source_queue)
     policy = source._aws_queue.attributes.get('RedrivePolicy')
     if policy is None:
         click.echo(
@@ -206,3 +214,28 @@ def reborn_messages(context, queue, msglimit, quiet):
         msglimit=msglimit,
         quiet=quiet,
     )
+
+
+@cli.command('msg-send')
+@click.argument('queue', required=True)
+@click.argument('messages', type=click.File('r'), required=False)
+@click.option('--quiet', '-q', default=False, is_flag=True,
+              help='Quiet mode (suppress any output or prompt)')
+@click.pass_context
+def send_messages(context, queue, messages, quiet):
+    """
+    Send messages to queue
+    """
+    if not messages:
+        messages = click.get_text_stream('stdin')
+
+    with messages:
+        try:
+            message_data = json.load(messages)
+        except json.decoder.JSONDecodeError:
+            click.echo('read data are not a json, :-(', err=True)
+            return
+
+    source = SQSQueue.get(get_resource(), queue)
+    for message in message_data['messages']:
+        source.send_message(message)
